@@ -2,7 +2,6 @@
 <html>
 <head>
     <title>Control Room - Live Rescue</title>
-    <!-- Map Libraries -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
@@ -26,35 +25,53 @@
     <div id="map"></div>
 
     <script>
-        const socket = io();
+        // Render ke secure connection (HTTPS) ke liye socket setup
+        const socket = io({ transports: ['websocket', 'polling'] });
         
-        // Map Setup (Map load karo)
-        const map = L.map('map').setView([15.8497, 74.4977], 13); // Default Location
+        const map = L.map('map').setView([15.8497, 74.4977], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Hospital/Ambulance Base ki Location
         const hospitalLocation = [15.8600, 74.5000];
-        L.marker(hospitalLocation).addTo(map).bindPopup("🏥 Ambulance Base").openPopup();
-
+        // Ambulance ka marker alag se banaya taaki ise move kar sakein
+        let ambulanceMarker = L.marker(hospitalLocation).addTo(map).bindPopup("🏥 Ambulance Base").openPopup();
         let routeControl = null;
 
-        // Jab server se SOS aaye
         socket.on('receive_sos', function(data) {
-            document.getElementById('alerts').innerHTML = ""; // Clear "waiting" text
+            document.getElementById('alerts').innerHTML = ""; 
             
-            // Map par victim ko mark karo
             const victimLocation = L.latLng(data.lat, data.lng);
             L.marker(victimLocation).addTo(map).bindPopup("🚨 ACCIDENT HERE").openPopup();
 
-            // Puraana rasta hatao aur naya Shortest Path banao
             if(routeControl) { map.removeControl(routeControl); }
+
+            // Route nikalne ke liye HTTPS server ka use karna zaroori hai (Error fix)
             routeControl = L.Routing.control({
                 waypoints: [ L.latLng(hospitalLocation), victimLocation ],
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1'
+                }),
                 routeWhileDragging: false,
                 lineOptions: { styles: [{color: 'blue', weight: 6}] }
             }).addTo(map);
 
-            // Sidebar mein details aur Photo dikhao
+            // LIVE TRACKING SIMULATION: Ambulance ko route par chalana
+            routeControl.on('routesfound', function(e) {
+                const routes = e.routes;
+                const coordinates = routes[0].coordinates; // Pura rasta (array of lat,lng)
+                let i = 0;
+                
+                // Har 300 millisecond mein ambulance thoda aage badhegi
+                const interval = setInterval(() => {
+                    if(i < coordinates.length) {
+                        ambulanceMarker.setLatLng([coordinates[i].lat, coordinates[i].lng]);
+                        i++;
+                    } else {
+                        clearInterval(interval);
+                        ambulanceMarker.bindPopup("🚑 Ambulance Reached!").openPopup();
+                    }
+                }, 300); 
+            });
+
             let alertHTML = `
                 <div class="alert-box">
                     <h3>⚠️ New Emergency</h3>
@@ -63,9 +80,7 @@
                 </div>
             `;
             document.getElementById('alerts').insertAdjacentHTML('afterbegin', alertHTML);
-            
-            // Map ko victim ki taraf ghumao
-            map.setView(victimLocation, 15);
+            map.setView(victimLocation, 14);
         });
     </script>
 </body>
