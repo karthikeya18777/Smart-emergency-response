@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency SOS</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: Arial; text-align: center; background: #ffe6e6; padding: 20px; }
+        .sos-btn {
+            background: red; color: white; border: none; border-radius: 50%;
+            width: 200px; height: 200px; font-size: 40px; font-weight: bold;
+            box-shadow: 0px 10px 20px rgba(255, 0, 0, 0.5); margin-top: 30px; cursor: pointer;
+        }
+        .sos-btn:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+    <h1>🚨 Rescue SOS</h1>
+    <p>Take a photo of the incident so we bring the right equipment:</p>
+    
+    <!-- Image Upload Option -->
+    <input type="file" id="incidentPhoto" accept="image/*" capture="environment">
+    <br>
+    
+    <!-- SOS Button -->
+    <button class="sos-btn" onclick="triggerSOS()">SOS</button>
+    <h3 id="statusMsg" style="color: red;"></h3>
+
+    <script>
+        const socket = io();
+
+        function triggerSOS() {
+            document.getElementById('statusMsg').innerText = "Fetching exact location...";
+            const fileInput = document.getElementById('incidentPhoto');
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+
+                    // Agar image daali hai toh usko process karo
+                    if (fileInput.files.length > 0) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            sendData(lat, lng, e.target.result);
+                        };
+                        reader.readAsDataURL(fileInput.files[0]);
+                    } else {
+                        sendData(lat, lng, null); // Bina image ke
+                    }
+                }, error => {
+                    document.getElementById('statusMsg').innerText = "Please enable GPS/Location!";
+                }, { enableHighAccuracy: true });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+
+        function sendData(lat, lng, photoBase64) {
+            socket.emit('send_sos', { 
+                lat: lat, 
+                lng: lng, 
+                photo: photoBase64 
+            });
+            document.getElementById('statusMsg').innerText = "✅ SOS Sent! Ambulance & Traffic Control Alerted.";
+            document.getElementById('statusMsg').style.color = "green";
+        }
+    </script>
+</body>
+</html>
