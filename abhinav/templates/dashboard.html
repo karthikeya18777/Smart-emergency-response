@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Control Room - Live Rescue</title>
+    <!-- Map Libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { margin: 0; display: flex; font-family: Arial; height: 100vh; }
+        #sidebar { width: 300px; background: #2c3e50; color: white; padding: 15px; overflow-y: scroll; }
+        #map { flex-grow: 1; }
+        .alert-box { background: #e74c3c; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        img { width: 100%; border-radius: 5px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>Live Emergencies 🚨</h2>
+        <div id="alerts">Waiting for SOS...</div>
+    </div>
+    
+    <div id="map"></div>
+
+    <script>
+        const socket = io();
+        
+        // Map Setup (Map load karo)
+        const map = L.map('map').setView([15.8497, 74.4977], 13); // Default Location
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Hospital/Ambulance Base ki Location
+        const hospitalLocation = [15.8600, 74.5000];
+        L.marker(hospitalLocation).addTo(map).bindPopup("🏥 Ambulance Base").openPopup();
+
+        let routeControl = null;
+
+        // Jab server se SOS aaye
+        socket.on('receive_sos', function(data) {
+            document.getElementById('alerts').innerHTML = ""; // Clear "waiting" text
+            
+            // Map par victim ko mark karo
+            const victimLocation = L.latLng(data.lat, data.lng);
+            L.marker(victimLocation).addTo(map).bindPopup("🚨 ACCIDENT HERE").openPopup();
+
+            // Puraana rasta hatao aur naya Shortest Path banao
+            if(routeControl) { map.removeControl(routeControl); }
+            routeControl = L.Routing.control({
+                waypoints: [ L.latLng(hospitalLocation), victimLocation ],
+                routeWhileDragging: false,
+                lineOptions: { styles: [{color: 'blue', weight: 6}] }
+            }).addTo(map);
+
+            // Sidebar mein details aur Photo dikhao
+            let alertHTML = `
+                <div class="alert-box">
+                    <h3>⚠️ New Emergency</h3>
+                    <p>Lat: ${data.lat.toFixed(4)}<br>Lng: ${data.lng.toFixed(4)}</p>
+                    ${data.photo ? `<img src="${data.photo}">` : '<p>No Photo Provided</p>'}
+                </div>
+            `;
+            document.getElementById('alerts').insertAdjacentHTML('afterbegin', alertHTML);
+            
+            // Map ko victim ki taraf ghumao
+            map.setView(victimLocation, 15);
+        });
+    </script>
+</body>
+</html>
